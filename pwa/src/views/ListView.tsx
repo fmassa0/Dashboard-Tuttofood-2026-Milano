@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -18,7 +19,9 @@ type SortKey = "alpha" | "citta" | "unvisited";
 type PaeseFilter = "all" | "it" | "estero";
 
 const ROW_COLLAPSED = 64;
-const ROW_EXPANDED_BASE = 700;
+// Initial guess for the expanded card before the real measurement arrives.
+// Real height is reported back from ExhibitorCard via ResizeObserver.
+const ROW_EXPANDED_GUESS = 900;
 
 export interface ListFilters {
   search: string;
@@ -56,6 +59,8 @@ export function ListView({ initialPadiglione, setView }: Props) {
   const [searchInput, setSearchInput] = useState(filters.search);
   const debouncedSearch = useDebounce(searchInput, 200);
   const listRef = useRef<List>(null);
+  // Heights reported by each rendered card. Only the expanded one differs from COLLAPSED.
+  const heightsRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (initialPadiglione) {
@@ -140,14 +145,37 @@ export function ListView({ initialPadiglione, setView }: Props) {
   }, [exhibitors, visits, filters]);
 
   // react-window: invalida la cache delle altezze quando cambia l espansione
+  // o l'insieme filtrato. Le misurazioni reali arrivano via onMeasureCard.
   useEffect(() => {
+    // Discard cached measurements: the previous expanded card no longer renders.
+    heightsRef.current.clear();
     listRef.current?.resetAfterIndex(0);
   }, [expandedId, filtered.length]);
 
-  const itemSize = (index: number) => {
-    const ex = filtered[index];
-    return ex && ex.id === expandedId ? ROW_EXPANDED_BASE : ROW_COLLAPSED;
-  };
+  const itemSize = useCallback(
+    (index: number) => {
+      const ex = filtered[index];
+      if (!ex) return ROW_COLLAPSED;
+      if (ex.id === expandedId) {
+        return heightsRef.current.get(ex.id) ?? ROW_EXPANDED_GUESS;
+      }
+      return ROW_COLLAPSED;
+    },
+    [filtered, expandedId],
+  );
+
+  const onMeasureCard = useCallback(
+    (id: string, height: number) => {
+      // Only the expanded one needs precise measurement; collapsed rows are uniform.
+      if (id !== expandedId) return;
+      const prev = heightsRef.current.get(id) ?? -1;
+      if (Math.abs(prev - height) <= 1) return;
+      heightsRef.current.set(id, height);
+      const idx = filtered.findIndex((e) => e.id === id);
+      if (idx >= 0) listRef.current?.resetAfterIndex(idx);
+    },
+    [expandedId, filtered],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -297,6 +325,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
                   visit={visits[ex.id]}
                   expanded={ex.id === expandedId}
                   onToggleExpand={() => setExpandedId(expandedId === ex.id ? null : ex.id)}
+                  onMeasure={onMeasureCard}
                 />
               </div>
             );

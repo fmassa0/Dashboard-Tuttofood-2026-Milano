@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Exhibitor, VisitState, CompanySize } from "../types";
 import { useAppState } from "../state";
 import { inferSize, SIZE_LABEL } from "../data/heuristics";
@@ -8,12 +8,14 @@ interface Props {
   visit: VisitState | undefined;
   expanded: boolean;
   onToggleExpand: () => void;
+  /** invoked when the rendered card height changes (so a virtualized list can resize the slot) */
+  onMeasure?: (id: string, height: number) => void;
 }
 
 const PRESET_TAGS = ["interessante", "ricontattare", "competitor", "fornitore"];
 const SIZES: CompanySize[] = ["grande", "media", "piccola", "consorzio", "n.d."];
 
-export function ExhibitorCard({ ex, visit, expanded, onToggleExpand }: Props) {
+export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }: Props) {
   const { toggleVisited, updateVisit, customTags, addCustomTag } = useAppState();
   const [noteDraft, setNoteDraft] = useState(visit?.notes ?? "");
   const [newTag, setNewTag] = useState("");
@@ -24,8 +26,34 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand }: Props) {
 
   const cats = (ex.categorie || "").split(" | ").filter(Boolean);
 
+  // Measure rendered height so the parent virtualized list can size the slot
+  // exactly. Without this the expanded card overlaps the items below it.
+  const wrapperRef = useRef<HTMLElement>(null);
+  const lastReportedH = useRef(0);
+  useLayoutEffect(() => {
+    if (!wrapperRef.current || !onMeasure) return;
+    const el = wrapperRef.current;
+    const report = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      if (h && Math.abs(h - lastReportedH.current) > 1) {
+        lastReportedH.current = h;
+        onMeasure(ex.id, h);
+      }
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ex.id, onMeasure, expanded]);
+
+  // Reset the local note draft if the underlying record changes (e.g. import sync)
+  useEffect(() => {
+    setNoteDraft(visit?.notes ?? "");
+  }, [visit?.notes]);
+
   return (
     <article
+      ref={wrapperRef}
       className={`border-b border-neutral-200 dark:border-neutral-800 ${
         visited ? "bg-emerald-50/60 dark:bg-emerald-900/10" : ""
       }`}
