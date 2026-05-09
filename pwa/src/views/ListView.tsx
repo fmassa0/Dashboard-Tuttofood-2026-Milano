@@ -11,6 +11,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { VariableSizeList as List } from "react-window";
 import { useAppState } from "../state";
 import { ExhibitorCard } from "../components/ExhibitorCard";
+import { FastTriage } from "../components/FastTriage";
 import { FilterControls } from "../components/FilterControls";
 import { applyFilters, sortExhibitors, DEFAULT_FILTERS } from "../data/filters";
 import type { ListFilters } from "../data/filters";
@@ -33,6 +34,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
     padiglioni: initialPadiglione ? [initialPadiglione] : [],
   }));
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [triageMode, setTriageMode] = useState(false);
   const listRef = useRef<List>(null);
   // Real measured height per card id (collapsed and expanded alike). Without this,
   // tiny pixel discrepancies between the static guess and the actual layout cause
@@ -91,15 +93,28 @@ export function ListView({ initialPadiglione, setView }: Props) {
           exhibitors={exhibitors}
         />
 
-        <div className="px-4 py-1 text-xs text-neutral-500 dark:text-neutral-400">
-          {filtered.length} di {exhibitors.length} espositori
-          {initialPadiglione && (
+        <div className="px-4 py-1 text-xs text-neutral-500 dark:text-neutral-400 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            {filtered.length} di {exhibitors.length} espositori
+            {initialPadiglione && (
+              <button
+                type="button"
+                onClick={() => setView("map")}
+                className="ml-2 text-brand-500 underline"
+              >
+                ← Torna alla mappa
+              </button>
+            )}
+          </span>
+          {filtered.length > 0 && (
             <button
               type="button"
-              onClick={() => setView("map")}
-              className="ml-2 text-brand-500 underline"
+              onClick={() => setTriageMode(true)}
+              className="min-h-tap px-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1"
+              title="Triage rapido: scorri una card alla volta per pianificare velocemente"
             >
-              ← Torna alla mappa
+              <span aria-hidden="true">🃏</span>
+              Triage rapido
             </button>
           )}
         </div>
@@ -127,6 +142,13 @@ export function ListView({ initialPadiglione, setView }: Props) {
           }}
         </AutoSizedList>
       </div>
+
+      {triageMode && (
+        <FastTriage
+          exhibitors={filtered}
+          onExit={() => setTriageMode(false)}
+        />
+      )}
     </div>
   );
 }
