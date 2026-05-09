@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Exhibitor, VisitState, CompanySize } from "../types";
 import { useAppState } from "../state";
 import { inferSize, SIZE_LABEL } from "../data/heuristics";
+import { BizCardScanButton } from "./BizCardScan";
 import { MediaSection } from "./MediaSection";
 
 interface Props {
@@ -221,6 +222,11 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }
 
           {/* Foto e audio */}
           <MediaSection exhibitorId={ex.id} />
+
+          {/* Scan biglietto da visita (OCR) */}
+          <div>
+            <BizCardScanButton exhibitorId={ex.id} />
+          </div>
 
           {/* Notes */}
           <div>
