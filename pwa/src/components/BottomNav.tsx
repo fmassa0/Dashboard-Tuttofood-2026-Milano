@@ -3,6 +3,7 @@ import type { ViewName } from "../types";
 const ITEMS: Array<{ id: ViewName; label: string; icon: string }> = [
   { id: "list", label: "Lista", icon: "M4 6h16M4 12h16M4 18h16" },
   { id: "map", label: "Mappa", icon: "M9 20l-5.447-2.724A2 2 0 013 15.382V6.618a2 2 0 011.553-1.894L9 4m0 16l6-2m-6 2V4m6 14l4.447 1.724A2 2 0 0021 17.382V6.618a2 2 0 00-1.553-1.894L15 3m0 15V3" },
+  { id: "route", label: "Percorso", icon: "M5 17a2 2 0 100-4 2 2 0 000 4zm0 0v-6a4 4 0 014-4h6a4 4 0 014 4v0M19 17a2 2 0 100-4 2 2 0 000 4z" },
   { id: "dashboard", label: "Dashboard", icon: "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" },
   { id: "export", label: "Export", icon: "M12 4v12m0 0l-4-4m4 4l4-4m-9 8h10" },
 ];
@@ -18,7 +19,7 @@ export function BottomNav({ current, onChange }: Props) {
       aria-label="Navigazione principale"
       className="fixed bottom-0 inset-x-0 z-30 border-t border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 backdrop-blur pb-safe"
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {ITEMS.map((it) => {
           const active = it.id === current;
           return (

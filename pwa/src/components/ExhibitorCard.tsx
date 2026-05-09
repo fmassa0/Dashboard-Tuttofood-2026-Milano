@@ -16,11 +16,12 @@ const PRESET_TAGS = ["interessante", "ricontattare", "competitor", "fornitore"];
 const SIZES: CompanySize[] = ["grande", "media", "piccola", "consorzio", "n.d."];
 
 export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }: Props) {
-  const { toggleVisited, updateVisit, customTags, addCustomTag } = useAppState();
+  const { toggleVisited, togglePlanned, updateVisit, customTags, addCustomTag } = useAppState();
   const [noteDraft, setNoteDraft] = useState(visit?.notes ?? "");
   const [newTag, setNewTag] = useState("");
 
   const visited = visit?.visited ?? false;
+  const planned = visit?.planned ?? false;
   const tags = visit?.tags ?? [];
   const size: CompanySize = visit?.size ?? inferSize(ex);
 
@@ -58,36 +59,52 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }
         visited ? "bg-emerald-50/60 dark:bg-emerald-900/10" : ""
       }`}
     >
-      <button
-        type="button"
-        onClick={onToggleExpand}
-        aria-expanded={expanded}
-        className="w-full text-left px-4 py-3 min-h-tap flex items-start gap-3 hover:bg-neutral-50 dark:hover:bg-neutral-900"
-      >
-        <span
-          aria-hidden="true"
-          className={`mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
-            visited
-              ? "bg-emerald-500 border-emerald-500 text-white"
-              : "border-neutral-300 dark:border-neutral-600"
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-expanded={expanded}
+          className="flex-1 min-w-0 text-left px-4 py-3 min-h-tap flex items-start gap-3 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+        >
+          <span
+            aria-hidden="true"
+            className={`mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+              visited
+                ? "bg-emerald-500 border-emerald-500 text-white"
+                : "border-neutral-300 dark:border-neutral-600"
+            }`}
+          >
+            {visited ? "✓" : ""}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold leading-tight truncate">{ex.nome}</span>
+            <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400 truncate">
+              {[ex.citta, ex.provincia, ex.paese].filter(Boolean).join(" · ")}
+              {ex.padiglione ? ` · Pad. ${ex.padiglione}` : ""}
+              {ex.stand ? ` Stand ${ex.stand}` : ""}
+            </span>
+          </span>
+          {tags.length > 0 && (
+            <span className="shrink-0 text-[10px] uppercase tracking-wide rounded bg-brand-50 dark:bg-brand-700/30 text-brand-700 dark:text-brand-50 px-1.5 py-0.5">
+              {tags.length} tag
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => void togglePlanned(ex.id)}
+          aria-pressed={planned}
+          aria-label={planned ? "Rimuovi dal percorso" : "Aggiungi al percorso"}
+          title={planned ? "Rimuovi dal percorso" : "Aggiungi al percorso"}
+          className={`shrink-0 min-h-tap min-w-tap px-3 flex items-center justify-center text-xl border-l border-neutral-200 dark:border-neutral-800 ${
+            planned
+              ? "text-amber-500"
+              : "text-neutral-300 dark:text-neutral-600 hover:text-amber-400"
           }`}
         >
-          {visited ? "✓" : ""}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold leading-tight truncate">{ex.nome}</span>
-          <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400 truncate">
-            {[ex.citta, ex.provincia, ex.paese].filter(Boolean).join(" · ")}
-            {ex.padiglione ? ` · Pad. ${ex.padiglione}` : ""}
-            {ex.stand ? ` Stand ${ex.stand}` : ""}
-          </span>
-        </span>
-        {tags.length > 0 && (
-          <span className="shrink-0 text-[10px] uppercase tracking-wide rounded bg-brand-50 dark:bg-brand-700/30 text-brand-700 dark:text-brand-50 px-1.5 py-0.5">
-            {tags.length} tag
-          </span>
-        )}
-      </button>
+          <span aria-hidden="true">{planned ? "★" : "☆"}</span>
+        </button>
+      </div>
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 text-sm">

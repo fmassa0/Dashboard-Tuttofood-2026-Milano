@@ -1,11 +1,12 @@
 import { get, set, createStore } from "idb-keyval";
-import type { AllVisits, VisitState } from "../types";
+import type { AllVisits, AppSettings, VisitState } from "../types";
 
 // Dedicated DB so we don't collide with anything else.
 const store = createStore("tf26-pwa", "kv");
 
 const VISITS_KEY = "visits.v1";
 const TAGS_KEY = "tags.v1";
+const SETTINGS_KEY = "settings.v1";
 
 export async function loadVisits(): Promise<AllVisits> {
   return ((await get(VISITS_KEY, store)) as AllVisits | undefined) ?? {};
@@ -37,6 +38,14 @@ export async function saveCustomTags(tags: string[]): Promise<void> {
   await set(TAGS_KEY, Array.from(new Set(tags)), store);
 }
 
+export async function loadSettings(): Promise<AppSettings> {
+  return ((await get(SETTINGS_KEY, store)) as AppSettings | undefined) ?? {};
+}
+
+export async function saveSettings(settings: AppSettings): Promise<void> {
+  await set(SETTINGS_KEY, settings, store);
+}
+
 // =========== Sync bundle (export/import fra dispositivi) ===========
 
 export interface SyncBundle {
@@ -45,16 +54,22 @@ export interface SyncBundle {
   exportedAt: number;
   visits: AllVisits;
   customTags: string[];
+  settings?: AppSettings;
 }
 
 export async function exportBundle(): Promise<SyncBundle> {
-  const [visits, customTags] = await Promise.all([loadVisits(), loadCustomTags()]);
+  const [visits, customTags, settings] = await Promise.all([
+    loadVisits(),
+    loadCustomTags(),
+    loadSettings(),
+  ]);
   return {
     format: "tf26-sync",
     version: 1,
     exportedAt: Date.now(),
     visits,
     customTags,
+    settings,
   };
 }
 
@@ -94,6 +109,7 @@ export function mergeBundle(local: AllVisits, incoming: AllVisits): { merged: Al
       notes: fresher.notes && fresher.notes.trim() ? fresher.notes : older.notes,
       tags: tagSet.size ? Array.from(tagSet) : undefined,
       size: fresher.size ?? older.size,
+      planned: cur.planned || inc.planned || false,
     };
     merged[id] = merge;
     if (incTs > curTs) stats.updated += 1;
@@ -114,6 +130,13 @@ export async function importBundle(bundle: SyncBundle): Promise<MergeStats> {
   const tagSet = new Set([...localTags, ...(bundle.customTags ?? [])]);
   const newTagsCount = tagSet.size - localTags.length;
   await saveCustomTags(Array.from(tagSet));
+
+  // Settings: the user explicitly imported this bundle, so any value it carries
+  // overrides the local one. Local-only keys are preserved.
+  if (bundle.settings) {
+    const localSettings = await loadSettings();
+    await saveSettings({ ...localSettings, ...bundle.settings });
+  }
   return { ...stats, newTags: newTagsCount };
 }
 

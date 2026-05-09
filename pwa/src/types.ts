@@ -29,8 +29,15 @@ export interface VisitState {
   notes?: string;
   tags?: string[];
   size?: CompanySize;
+  /** marked for the planned route */
+  planned?: boolean;
 }
 
 export type AllVisits = Record<string, VisitState>;
 
-export type ViewName = "list" | "map" | "dashboard" | "export";
+export interface AppSettings {
+  /** padiglione di partenza per il calcolo del percorso */
+  routeStart?: string;
+}
+
+export type ViewName = "list" | "map" | "route" | "dashboard" | "export";
