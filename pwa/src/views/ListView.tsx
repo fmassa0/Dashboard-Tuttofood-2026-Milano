@@ -206,7 +206,11 @@ export function ListView({ initialPadiglione, setView }: Props) {
         </div>
 
         {filtersOpen && (
-          <div id="filters-panel" className="px-4 pb-3 space-y-3 text-sm border-t border-neutral-200 dark:border-neutral-800">
+          <div
+            id="filters-panel"
+            className="px-4 pb-3 space-y-3 text-sm border-t border-neutral-200 dark:border-neutral-800 overflow-y-auto overscroll-contain"
+            style={{ maxHeight: "calc(100svh - 13rem)" }}
+          >
             <FilterRow label="Paese">
               <div className="flex gap-1.5 flex-wrap">
                 {(["all", "it", "estero"] as PaeseFilter[]).map((p) => (
@@ -356,7 +360,7 @@ function ChipMulti({
 }) {
   const set = new Set(values);
   return (
-    <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((o) => {
         const on = set.has(o.id);
         return (
@@ -400,7 +404,7 @@ function ScrollableMulti({
         placeholder="filtra categorie..."
         className="w-full min-h-tap rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 mb-1 text-xs"
       />
-      <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+      <div className="flex flex-wrap gap-1.5">
         {visible.map((c) => {
           const on = set.has(c);
           return (
