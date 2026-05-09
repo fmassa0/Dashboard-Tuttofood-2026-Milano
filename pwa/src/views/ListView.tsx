@@ -59,7 +59,9 @@ export function ListView({ initialPadiglione, setView }: Props) {
   const [searchInput, setSearchInput] = useState(filters.search);
   const debouncedSearch = useDebounce(searchInput, 200);
   const listRef = useRef<List>(null);
-  // Heights reported by each rendered card. Only the expanded one differs from COLLAPSED.
+  // Real measured height per card id (collapsed and expanded alike). Without this,
+  // tiny pixel discrepancies between the static guess and the actual layout cause
+  // adjacent rows to visually overlap on mobile.
   const heightsRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
@@ -144,37 +146,32 @@ export function ListView({ initialPadiglione, setView }: Props) {
     return result.sort(cmp);
   }, [exhibitors, visits, filters]);
 
-  // react-window: invalida la cache delle altezze quando cambia l espansione
-  // o l'insieme filtrato. Le misurazioni reali arrivano via onMeasureCard.
+  // Heights are keyed by exhibitor id, so they remain valid when filters change
+  // the visible set — only the row positions need to be recalculated.
   useEffect(() => {
-    // Discard cached measurements: the previous expanded card no longer renders.
-    heightsRef.current.clear();
     listRef.current?.resetAfterIndex(0);
-  }, [expandedId, filtered.length]);
+  }, [expandedId, filtered]);
 
   const itemSize = useCallback(
     (index: number) => {
       const ex = filtered[index];
       if (!ex) return ROW_COLLAPSED;
-      if (ex.id === expandedId) {
-        return heightsRef.current.get(ex.id) ?? ROW_EXPANDED_GUESS;
-      }
-      return ROW_COLLAPSED;
+      const cached = heightsRef.current.get(ex.id);
+      if (cached) return cached;
+      return ex.id === expandedId ? ROW_EXPANDED_GUESS : ROW_COLLAPSED;
     },
     [filtered, expandedId],
   );
 
   const onMeasureCard = useCallback(
     (id: string, height: number) => {
-      // Only the expanded one needs precise measurement; collapsed rows are uniform.
-      if (id !== expandedId) return;
       const prev = heightsRef.current.get(id) ?? -1;
       if (Math.abs(prev - height) <= 1) return;
       heightsRef.current.set(id, height);
       const idx = filtered.findIndex((e) => e.id === id);
       if (idx >= 0) listRef.current?.resetAfterIndex(idx);
     },
-    [expandedId, filtered],
+    [filtered],
   );
 
   return (
