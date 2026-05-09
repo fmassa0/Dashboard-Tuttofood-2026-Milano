@@ -10,42 +10,16 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { VariableSizeList as List } from "react-window";
 import { useAppState } from "../state";
-import { useDebounce } from "../hooks/useDebounce";
 import { ExhibitorCard } from "../components/ExhibitorCard";
-import { inferSize, SIZE_LABEL } from "../data/heuristics";
-import type { CompanySize, Exhibitor, ViewName } from "../types";
-
-type SortKey = "alpha" | "citta" | "unvisited";
-type PaeseFilter = "all" | "it" | "estero";
+import { FilterControls } from "../components/FilterControls";
+import { applyFilters, sortExhibitors, DEFAULT_FILTERS } from "../data/filters";
+import type { ListFilters } from "../data/filters";
+import type { ViewName } from "../types";
 
 const ROW_COLLAPSED = 64;
 // Initial guess for the expanded card before the real measurement arrives.
 // Real height is reported back from ExhibitorCard via ResizeObserver.
 const ROW_EXPANDED_GUESS = 900;
-
-export interface ListFilters {
-  search: string;
-  regioni: string[];
-  province: string[];
-  paeseFilter: PaeseFilter;
-  padiglioni: string[];
-  categorie: string[];
-  sizes: CompanySize[];
-  sort: SortKey;
-  onlyPlanned: boolean;
-}
-
-const DEFAULT_FILTERS: ListFilters = {
-  search: "",
-  regioni: [],
-  province: [],
-  paeseFilter: "all",
-  padiglioni: [],
-  categorie: [],
-  sizes: [],
-  sort: "alpha",
-  onlyPlanned: false,
-};
 
 interface Props {
   initialPadiglione?: string;
@@ -58,10 +32,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
     ...DEFAULT_FILTERS,
     padiglioni: initialPadiglione ? [initialPadiglione] : [],
   }));
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [searchInput, setSearchInput] = useState(filters.search);
-  const debouncedSearch = useDebounce(searchInput, 200);
   const listRef = useRef<List>(null);
   // Real measured height per card id (collapsed and expanded alike). Without this,
   // tiny pixel discrepancies between the static guess and the actual layout cause
@@ -78,102 +49,9 @@ export function ListView({ initialPadiglione, setView }: Props) {
     }
   }, [initialPadiglione]);
 
-  useEffect(() => {
-    setFilters((f) => ({ ...f, search: debouncedSearch }));
-  }, [debouncedSearch]);
-
-  const allRegioni = useMemo(
-    () => Array.from(new Set(exhibitors.map((e) => e.regione).filter(Boolean))).sort(),
-    [exhibitors],
-  );
-  const allPadiglioni = useMemo(
-    () =>
-      Array.from(new Set(exhibitors.map((e) => e.padiglione).filter(Boolean))).sort(
-        (a, b) => Number(a) - Number(b) || a.localeCompare(b),
-      ),
-    [exhibitors],
-  );
-  const allCategorie = useMemo(() => {
-    const s = new Set<string>();
-    for (const e of exhibitors) {
-      for (const c of (e.categorie || "").split(" | ")) {
-        if (c) s.add(c);
-      }
-    }
-    return Array.from(s).sort();
-  }, [exhibitors]);
-
-  // Province ristrette alle regioni selezionate. Se nessuna regione, l'array è
-  // vuoto e il filtro provincia non viene mostrato.
-  const provinceForSelectedRegioni = useMemo(() => {
-    if (filters.regioni.length === 0) return [] as string[];
-    const reg = new Set(filters.regioni);
-    const s = new Set<string>();
-    for (const e of exhibitors) {
-      if (reg.has(e.regione) && e.provincia) s.add(e.provincia);
-    }
-    return Array.from(s).sort();
-  }, [exhibitors, filters.regioni]);
-
-  // Quando cambiano le regioni, rimuovi dalle province selezionate quelle che
-  // non appartengono più al set disponibile, così il filtro non resta "appeso".
-  useEffect(() => {
-    if (filters.province.length === 0) return;
-    const allowed = new Set(provinceForSelectedRegioni);
-    const pruned = filters.province.filter((p) => allowed.has(p));
-    if (pruned.length !== filters.province.length) {
-      setFilters((f) => ({ ...f, province: pruned }));
-    }
-  }, [provinceForSelectedRegioni, filters.province]);
-
   const filtered = useMemo(() => {
-    const q = filters.search.trim().toLowerCase();
-    const reg = new Set(filters.regioni);
-    const prov = new Set(filters.province);
-    const pads = new Set(filters.padiglioni);
-    const cats = new Set(filters.categorie);
-    const sizes = new Set(filters.sizes);
-
-    const result = exhibitors.filter((e) => {
-      if (filters.onlyPlanned && !visits[e.id]?.planned) return false;
-      if (q) {
-        const hay =
-          (e.nome + " " + e.citta + " " + e.descrizione + " " + e.marchi).toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (reg.size && !reg.has(e.regione)) return false;
-      if (prov.size && !prov.has(e.provincia)) return false;
-      if (filters.paeseFilter === "it") {
-        if (!/^ITALIA|ITALY$/i.test(e.paese)) return false;
-      } else if (filters.paeseFilter === "estero") {
-        if (/^ITALIA|ITALY$/i.test(e.paese)) return false;
-      }
-      if (pads.size && !pads.has(e.padiglione)) return false;
-      if (cats.size) {
-        const ecats = (e.categorie || "").split(" | ");
-        if (!ecats.some((c) => cats.has(c))) return false;
-      }
-      if (sizes.size) {
-        const s = visits[e.id]?.size ?? inferSize(e);
-        if (!sizes.has(s)) return false;
-      }
-      return true;
-    });
-
-    const cmp = (a: Exhibitor, b: Exhibitor) => {
-      switch (filters.sort) {
-        case "citta":
-          return (a.citta || "ZZZ").localeCompare(b.citta || "ZZZ") || a.nome.localeCompare(b.nome);
-        case "unvisited": {
-          const av = visits[a.id]?.visited ? 1 : 0;
-          const bv = visits[b.id]?.visited ? 1 : 0;
-          return av - bv || a.nome.localeCompare(b.nome);
-        }
-        default:
-          return a.nome.localeCompare(b.nome);
-      }
-    };
-    return result.sort(cmp);
+    const base = applyFilters(exhibitors, filters, visits);
+    return sortExhibitors(base, filters.sort, visits);
   }, [exhibitors, visits, filters]);
 
   // Heights are keyed by exhibitor id, so they remain valid when filters change
@@ -207,161 +85,11 @@ export function ListView({ initialPadiglione, setView }: Props) {
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-20 bg-white/95 dark:bg-neutral-950/95 backdrop-blur border-b border-neutral-200 dark:border-neutral-800 pt-safe">
-        <div className="px-4 py-2 flex gap-2 items-center">
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Cerca nome, città, descrizione..."
-            aria-label="Cerca"
-            className="flex-1 min-h-tap rounded-full border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4"
-          />
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            aria-expanded={filtersOpen}
-            aria-controls="filters-panel"
-            className="min-h-tap min-w-tap px-3 rounded-full border border-neutral-300 dark:border-neutral-700 font-medium"
-          >
-            Filtri
-            {(() => {
-              const n =
-                filters.regioni.length +
-                filters.province.length +
-                filters.padiglioni.length +
-                filters.categorie.length +
-                filters.sizes.length +
-                (filters.onlyPlanned ? 1 : 0) +
-                (filters.paeseFilter !== "all" ? 1 : 0);
-              return n > 0 ? (
-                <span className="ml-1 inline-flex items-center justify-center text-xs bg-brand-500 text-white rounded-full px-1.5">
-                  {n}
-                </span>
-              ) : null;
-            })()}
-          </button>
-        </div>
-
-        {filtersOpen && (
-          <div
-            id="filters-panel"
-            className="px-4 pb-3 space-y-3 text-sm border-t border-neutral-200 dark:border-neutral-800 overflow-y-auto overscroll-contain"
-            style={{ maxHeight: "calc(100svh - 13rem)" }}
-          >
-            <FilterRow label="Selezione">
-              <button
-                type="button"
-                aria-pressed={filters.onlyPlanned}
-                onClick={() => setFilters({ ...filters, onlyPlanned: !filters.onlyPlanned })}
-                className={`min-h-tap px-3 rounded-full border text-xs font-medium inline-flex items-center gap-1 ${
-                  filters.onlyPlanned
-                    ? "bg-amber-500 border-amber-500 text-white"
-                    : "border-neutral-300 dark:border-neutral-700"
-                }`}
-              >
-                <span aria-hidden="true">★</span>
-                Solo nel percorso
-              </button>
-            </FilterRow>
-
-            <FilterRow label="Paese">
-              <div className="flex gap-1.5 flex-wrap">
-                {(["all", "it", "estero"] as PaeseFilter[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    aria-pressed={filters.paeseFilter === p}
-                    onClick={() => setFilters({ ...filters, paeseFilter: p })}
-                    className={`min-h-tap px-3 rounded-full border text-xs font-medium ${
-                      filters.paeseFilter === p
-                        ? "bg-brand-500 border-brand-500 text-white"
-                        : "border-neutral-300 dark:border-neutral-700"
-                    }`}
-                  >
-                    {p === "all" ? "tutti" : p === "it" ? "Italia" : "estero"}
-                  </button>
-                ))}
-              </div>
-            </FilterRow>
-
-            <FilterRow label="Sort">
-              <div className="flex gap-1.5 flex-wrap">
-                {([
-                  ["alpha", "A→Z"],
-                  ["citta", "città"],
-                  ["unvisited", "non ancora visitati"],
-                ] as Array<[SortKey, string]>).map(([k, lab]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={filters.sort === k}
-                    onClick={() => setFilters({ ...filters, sort: k })}
-                    className={`min-h-tap px-3 rounded-full border text-xs font-medium ${
-                      filters.sort === k
-                        ? "bg-brand-500 border-brand-500 text-white"
-                        : "border-neutral-300 dark:border-neutral-700"
-                    }`}
-                  >
-                    {lab}
-                  </button>
-                ))}
-              </div>
-            </FilterRow>
-
-            <FilterRow label="Grandezza">
-              <ChipMulti
-                values={filters.sizes}
-                options={(["grande", "media", "piccola", "consorzio", "n.d."] as CompanySize[]).map((s) => ({ id: s, label: SIZE_LABEL[s] }))}
-                onChange={(next) => setFilters({ ...filters, sizes: next as CompanySize[] })}
-              />
-            </FilterRow>
-
-            <FilterRow label={`Padiglione (${allPadiglioni.length})`}>
-              <ChipMulti
-                values={filters.padiglioni}
-                options={allPadiglioni.map((p) => ({ id: p, label: `Pad. ${p}` }))}
-                onChange={(next) => setFilters({ ...filters, padiglioni: next })}
-              />
-            </FilterRow>
-
-            <FilterRow label={`Regione (${allRegioni.length})`}>
-              <ChipMulti
-                values={filters.regioni}
-                options={allRegioni.map((r) => ({ id: r, label: r }))}
-                onChange={(next) => setFilters({ ...filters, regioni: next })}
-              />
-            </FilterRow>
-
-            {provinceForSelectedRegioni.length > 0 && (
-              <FilterRow label={`Provincia (${provinceForSelectedRegioni.length})`}>
-                <ChipMulti
-                  values={filters.province}
-                  options={provinceForSelectedRegioni.map((p) => ({ id: p, label: p }))}
-                  onChange={(next) => setFilters({ ...filters, province: next })}
-                />
-              </FilterRow>
-            )}
-
-            <FilterRow label={`Categoria (${allCategorie.length})`}>
-              <ScrollableMulti
-                values={filters.categorie}
-                options={allCategorie}
-                onChange={(next) => setFilters({ ...filters, categorie: next })}
-              />
-            </FilterRow>
-
-            <button
-              type="button"
-              onClick={() => {
-                setFilters(DEFAULT_FILTERS);
-                setSearchInput("");
-              }}
-              className="min-h-tap px-3 rounded-full border border-neutral-300 dark:border-neutral-700 text-xs font-medium"
-            >
-              Pulisci tutto
-            </button>
-          </div>
-        )}
+        <FilterControls
+          filters={filters}
+          onChange={setFilters}
+          exhibitors={exhibitors}
+        />
 
         <div className="px-4 py-1 text-xs text-neutral-500 dark:text-neutral-400">
           {filtered.length} di {exhibitors.length} espositori
@@ -398,94 +126,6 @@ export function ListView({ initialPadiglione, setView }: Props) {
             );
           }}
         </AutoSizedList>
-      </div>
-    </div>
-  );
-}
-
-function FilterRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">{label}</div>
-      {children}
-    </div>
-  );
-}
-
-function ChipMulti({
-  values,
-  options,
-  onChange,
-}: {
-  values: string[];
-  options: Array<{ id: string; label: string }>;
-  onChange: (next: string[]) => void;
-}) {
-  const set = new Set(values);
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => {
-        const on = set.has(o.id);
-        return (
-          <button
-            key={o.id}
-            type="button"
-            aria-pressed={on}
-            onClick={() =>
-              onChange(on ? values.filter((v) => v !== o.id) : [...values, o.id])
-            }
-            className={`min-h-tap px-3 rounded-full border text-xs font-medium ${
-              on ? "bg-brand-500 border-brand-500 text-white" : "border-neutral-300 dark:border-neutral-700"
-            }`}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ScrollableMulti({
-  values,
-  options,
-  onChange,
-}: {
-  values: string[];
-  options: string[];
-  onChange: (next: string[]) => void;
-}) {
-  const [q, setQ] = useState("");
-  const set = new Set(values);
-  const visible = options.filter((o) => o.toLowerCase().includes(q.toLowerCase())).slice(0, 60);
-  return (
-    <div>
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="filtra categorie..."
-        className="w-full min-h-tap rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-2 mb-1 text-xs"
-      />
-      <div className="flex flex-wrap gap-1.5">
-        {visible.map((c) => {
-          const on = set.has(c);
-          return (
-            <button
-              key={c}
-              type="button"
-              aria-pressed={on}
-              onClick={() =>
-                onChange(on ? values.filter((v) => v !== c) : [...values, c])
-              }
-              className={`min-h-tap px-3 rounded-full border text-xs font-medium ${
-                on ? "bg-brand-500 border-brand-500 text-white" : "border-neutral-300 dark:border-neutral-700"
-              }`}
-            >
-              {c}
-            </button>
-          );
-        })}
       </div>
     </div>
   );
