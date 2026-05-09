@@ -15,6 +15,7 @@ import {
   loadSettings,
   loadVisits,
   patchVisit,
+  patchVisitsManyWith,
   saveCustomTags,
   saveSettings,
 } from "./data/storage";
@@ -39,6 +40,7 @@ interface AppState {
   toggleVisited: (id: string) => Promise<void>;
   togglePlanned: (id: string) => Promise<void>;
   updateVisit: (id: string, patch: Partial<VisitState>) => Promise<void>;
+  updateVisitsMany: (ids: string[], xform: (v: VisitState) => VisitState) => Promise<void>;
   addCustomTag: (tag: string) => Promise<void>;
   setRouteStart: (padiglione: string) => Promise<void>;
   addPhoto: (exhibitorId: string, file: File | Blob) => Promise<void>;
@@ -90,6 +92,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const updateVisit = useCallback(
     async (id: string, patch: Partial<VisitState>) => {
       const next = await patchVisit(id, patch);
+      setVisits({ ...next });
+    },
+    [],
+  );
+
+  const updateVisitsMany = useCallback(
+    async (ids: string[], xform: (v: VisitState) => VisitState) => {
+      const next = await patchVisitsManyWith(ids, xform);
       setVisits({ ...next });
     },
     [],
@@ -180,6 +190,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       toggleVisited,
       togglePlanned,
       updateVisit,
+      updateVisitsMany,
       addCustomTag,
       setRouteStart,
       addPhoto,
@@ -188,7 +199,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       exportSync,
       importSync,
     }),
-    [exhibitors, loading, error, visits, customTags, settings, media, toggleVisited, togglePlanned, updateVisit, addCustomTag, setRouteStart, addPhoto, addAudio, removeMedia, exportSync, importSync],
+    [exhibitors, loading, error, visits, customTags, settings, media, toggleVisited, togglePlanned, updateVisit, updateVisitsMany, addCustomTag, setRouteStart, addPhoto, addAudio, removeMedia, exportSync, importSync],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

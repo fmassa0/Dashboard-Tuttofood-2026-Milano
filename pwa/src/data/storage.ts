@@ -30,6 +30,25 @@ export async function patchVisit(
   return all;
 }
 
+/**
+ * Batch update: applica una trasformazione a molti id in un unico ciclo
+ * load → mutate → save. Evita N round-trip su IndexedDB quando l'utente
+ * applica un'azione in massa (es. marca 200 stand come visitati).
+ */
+export async function patchVisitsManyWith(
+  ids: string[],
+  transform: (current: VisitState) => VisitState,
+): Promise<AllVisits> {
+  if (ids.length === 0) return loadVisits();
+  const all = await loadVisits();
+  for (const id of ids) {
+    const current = all[id] ?? { visited: false };
+    all[id] = transform(current);
+  }
+  await saveVisits(all);
+  return all;
+}
+
 export async function loadCustomTags(): Promise<string[]> {
   return ((await get(TAGS_KEY, store)) as string[] | undefined) ?? [];
 }

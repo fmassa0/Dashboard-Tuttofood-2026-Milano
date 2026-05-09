@@ -10,6 +10,7 @@ import {
 import type { CSSProperties, ReactNode } from "react";
 import { VariableSizeList as List } from "react-window";
 import { useAppState } from "../state";
+import { BulkActionsSheet } from "../components/BulkActionsSheet";
 import { ExhibitorCard } from "../components/ExhibitorCard";
 import { FastTriage } from "../components/FastTriage";
 import { FilterControls } from "../components/FilterControls";
@@ -35,6 +36,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
   }));
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [triageMode, setTriageMode] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const listRef = useRef<List>(null);
   // Real measured height per card id (collapsed and expanded alike). Without this,
   // tiny pixel discrepancies between the static guess and the actual layout cause
@@ -107,15 +109,26 @@ export function ListView({ initialPadiglione, setView }: Props) {
             )}
           </span>
           {filtered.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setTriageMode(true)}
-              className="min-h-tap px-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1"
-              title="Triage rapido: scorri una card alla volta per pianificare velocemente"
-            >
-              <span aria-hidden="true">🃏</span>
-              Triage rapido
-            </button>
+            <span className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setBulkOpen(true)}
+                className="min-h-tap px-3 rounded-full border border-neutral-300 dark:border-neutral-700 text-xs font-medium inline-flex items-center gap-1"
+                title="Azioni in massa sul sottoinsieme filtrato"
+              >
+                <span aria-hidden="true">⚡</span>
+                Azioni
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriageMode(true)}
+                className="min-h-tap px-3 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1"
+                title="Triage rapido: scorri una card alla volta per pianificare velocemente"
+              >
+                <span aria-hidden="true">🃏</span>
+                Triage rapido
+              </button>
+            </span>
           )}
         </div>
       </div>
@@ -147,6 +160,13 @@ export function ListView({ initialPadiglione, setView }: Props) {
         <FastTriage
           exhibitors={filtered}
           onExit={() => setTriageMode(false)}
+        />
+      )}
+
+      {bulkOpen && (
+        <BulkActionsSheet
+          exhibitors={filtered}
+          onClose={() => setBulkOpen(false)}
         />
       )}
     </div>
