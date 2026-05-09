@@ -6,3 +6,9 @@ __pycache__/
 progress.json
 scrape.log
 *.bak
+
+# PWA build / deps
+pwa/node_modules/
+pwa/dist/
+pwa/preview.log
+pwa/*.tsbuildinfo
