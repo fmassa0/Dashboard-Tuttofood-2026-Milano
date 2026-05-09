@@ -80,3 +80,48 @@ export function optimizeRoute(
 
   return { stops, unknownHalls, totalDistance };
 }
+
+/**
+ * Serializza il percorso come testo da inviare via WhatsApp/email/sms.
+ * Niente markdown, solo Unicode + emoji così il messaggio resta leggibile in
+ * tutti i client. Le fermate sono numerate progressivamente per facilitare il
+ * coordinamento col collega ("vediamoci alla tappa 7").
+ */
+export function formatRouteAsText(
+  route: OptimizedRoute,
+  startHall: string,
+  options?: { url?: string },
+): string {
+  const totalStands = route.stops.reduce((s, st) => s + st.exhibitors.length, 0);
+  const lines: string[] = [];
+  lines.push("Tuttofood 2026 — il mio percorso");
+  lines.push(
+    `${totalStands} ${totalStands === 1 ? "stand" : "stand"} · ${
+      route.stops.length
+    } ${route.stops.length === 1 ? "padiglione" : "padiglioni"} · partenza Pad. ${startHall}`,
+  );
+  lines.push("");
+
+  let n = 1;
+  route.stops.forEach((stop) => {
+    lines.push(
+      `📍 Pad. ${stop.hall} (${stop.exhibitors.length} ${
+        stop.exhibitors.length === 1 ? "stand" : "stand"
+      })`,
+    );
+    stop.exhibitors.forEach((ex) => {
+      const stand = ex.stand ? ` — Stand ${ex.stand}` : "";
+      const citta = ex.citta ? ` (${ex.citta})` : "";
+      lines.push(`${n}. ${ex.nome}${stand}${citta}`);
+      n += 1;
+    });
+    lines.push("");
+  });
+
+  if (options?.url) {
+    lines.push(`Pianificato con la PWA: ${options.url}`);
+  }
+
+  return lines.join("\n").trim();
+}
+

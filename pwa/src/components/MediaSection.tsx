@@ -264,25 +264,40 @@ function PhotoTile({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="relative aspect-square rounded overflow-hidden bg-neutral-100 dark:bg-neutral-800 group focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
-        aria-label="Apri foto"
-      >
-        {url ? (
-          <img
-            src={url}
-            alt=""
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <span className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
-            ...
-          </span>
-        )}
-      </button>
+      <div className="relative aspect-square">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="absolute inset-0 rounded overflow-hidden bg-neutral-100 dark:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-500"
+          aria-label="Apri foto"
+        >
+          {url ? (
+            <img
+              src={url}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <span className="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
+              ...
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            // Stop propagation così non apriamo anche il lightbox sotto.
+            e.stopPropagation();
+            if (window.confirm("Eliminare questa foto?")) onDelete();
+          }}
+          className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white text-xs font-bold flex items-center justify-center hover:bg-red-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          aria-label="Elimina foto"
+          title="Elimina foto"
+        >
+          ✕
+        </button>
+      </div>
       {open && url && (
         <PhotoLightbox url={url} onClose={() => setOpen(false)} onDelete={onDelete} />
       )}

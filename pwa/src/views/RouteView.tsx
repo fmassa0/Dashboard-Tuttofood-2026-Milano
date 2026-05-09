@@ -4,7 +4,7 @@ import { FilterControls } from "../components/FilterControls";
 import { LiveWalk } from "../components/LiveWalk";
 import { RouteMap } from "../components/RouteMap";
 import { HALL_BOXES } from "../data/halls";
-import { optimizeRoute } from "../data/route";
+import { formatRouteAsText, optimizeRoute } from "../data/route";
 import { applyFilters, DEFAULT_FILTERS } from "../data/filters";
 import type { ListFilters } from "../data/filters";
 import type { ViewName } from "../types";
@@ -30,6 +30,7 @@ export function RouteView({ setView }: Props) {
   // dall'ottimizzazione del percorso, quindi non li mostriamo nei controlli.
   const [filters, setFilters] = useState<ListFilters>(DEFAULT_FILTERS);
   const [liveMode, setLiveMode] = useState(false);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
 
   const start = settings.routeStart ?? DEFAULT_START;
   const imageBase = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
@@ -53,6 +54,44 @@ export function RouteView({ setView }: Props) {
     (n, e) => n + (visits[e.id]?.visited ? 1 : 0),
     0,
   );
+
+  // Web Share API se disponibile (mobile: apre il foglio condivisione nativo
+  // → WhatsApp, mail, ecc.); fallback automatico al clipboard quando il
+  // browser non supporta share o l'utente annulla. Serve a chi non ha la PWA
+  // installata e quindi non può importare il JSON di sync.
+  const shareRoute = async () => {
+    if (filteredPlanned.length === 0) return;
+    const url = window.location.origin + window.location.pathname;
+    const text = formatRouteAsText(route, start, { url });
+    const title = "Il mio percorso Tuttofood 2026";
+
+    setShareMsg(null);
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        setShareMsg("Condiviso ✓");
+        return;
+      } catch (e) {
+        // L'utente che chiude il foglio nativo lancia AbortError: non è un
+        // errore, semplicemente non condividere e non mostrare messaggi.
+        if ((e as DOMException)?.name === "AbortError") return;
+        // qualunque altro errore: tenta il clipboard come ripiego
+      }
+    }
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setShareMsg("Copiato negli appunti ✓ — incollalo dove vuoi");
+        return;
+      } catch {
+        // continua al fallback finale
+      }
+    }
+
+    setShareMsg("Condivisione non supportata da questo browser.");
+  };
 
   const allHallIds = useMemo(
     () =>
@@ -149,6 +188,23 @@ export function RouteView({ setView }: Props) {
             >
               ▶ Avvia percorso ({filteredPlanned.length} stand)
             </button>
+            <button
+              type="button"
+              onClick={() => void shareRoute()}
+              className="w-full min-h-tap rounded-lg border border-neutral-300 dark:border-neutral-700 font-medium text-sm inline-flex items-center justify-center gap-2"
+            >
+              <span aria-hidden="true">📤</span>
+              Condividi percorso (testo)
+            </button>
+            {shareMsg && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="text-xs text-center text-neutral-600 dark:text-neutral-400"
+              >
+                {shareMsg}
+              </div>
+            )}
             <RouteMap
               route={route}
               startHall={start}
