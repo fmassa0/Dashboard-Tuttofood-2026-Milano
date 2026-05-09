@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.claude/
+
+# Stato locale dello scraper
+progress.json
+scrape.log
+*.bak
