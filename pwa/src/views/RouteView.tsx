@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "../state";
 import { FilterControls } from "../components/FilterControls";
+import { RouteMap } from "../components/RouteMap";
 import { HALL_BOXES } from "../data/halls";
 import { optimizeRoute } from "../data/route";
 import { applyFilters, DEFAULT_FILTERS } from "../data/filters";
@@ -29,6 +30,7 @@ export function RouteView({ setView }: Props) {
   const [filters, setFilters] = useState<ListFilters>(DEFAULT_FILTERS);
 
   const start = settings.routeStart ?? DEFAULT_START;
+  const imageBase = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 
   const planned = useMemo(
     () => exhibitors.filter((e) => visits[e.id]?.planned),
@@ -137,6 +139,13 @@ export function RouteView({ setView }: Props) {
               per vedere tutto il percorso.
             </div>
           ) : (
+            <>
+            <RouteMap
+              route={route}
+              startHall={start}
+              visits={visits}
+              imageBase={imageBase}
+            />
             <ol className="space-y-4">
               {route.stops.map((stop, idx) => {
                 const stopVisited = stop.exhibitors.every((e) => visits[e.id]?.visited);
@@ -221,6 +230,7 @@ export function RouteView({ setView }: Props) {
                 );
               })}
             </ol>
+            </>
           )}
 
           <p className="text-xs text-neutral-500 pt-2">
