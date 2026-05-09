@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useAppState } from "../state";
 import { FilterControls } from "../components/FilterControls";
+import { LiveWalk } from "../components/LiveWalk";
 import { RouteMap } from "../components/RouteMap";
 import { HALL_BOXES } from "../data/halls";
 import { optimizeRoute } from "../data/route";
@@ -28,6 +29,7 @@ export function RouteView({ setView }: Props) {
   // qui è implicito (la view mostra solo i preferiti) e il sort è sostituito
   // dall'ottimizzazione del percorso, quindi non li mostriamo nei controlli.
   const [filters, setFilters] = useState<ListFilters>(DEFAULT_FILTERS);
+  const [liveMode, setLiveMode] = useState(false);
 
   const start = settings.routeStart ?? DEFAULT_START;
   const imageBase = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
@@ -140,6 +142,13 @@ export function RouteView({ setView }: Props) {
             </div>
           ) : (
             <>
+            <button
+              type="button"
+              onClick={() => setLiveMode(true)}
+              className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 text-base shadow-sm"
+            >
+              ▶ Avvia percorso ({filteredPlanned.length} stand)
+            </button>
             <RouteMap
               route={route}
               startHall={start}
@@ -239,6 +248,10 @@ export function RouteView({ setView }: Props) {
           </p>
         </div>
       </div>
+
+      {liveMode && (
+        <LiveWalk route={route} onExit={() => setLiveMode(false)} />
+      )}
     </div>
   );
 }
