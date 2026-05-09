@@ -26,6 +26,7 @@ const ROW_EXPANDED_GUESS = 900;
 export interface ListFilters {
   search: string;
   regioni: string[];
+  province: string[];
   paeseFilter: PaeseFilter;
   padiglioni: string[];
   categorie: string[];
@@ -37,6 +38,7 @@ export interface ListFilters {
 const DEFAULT_FILTERS: ListFilters = {
   search: "",
   regioni: [],
+  province: [],
   paeseFilter: "all",
   padiglioni: [],
   categorie: [],
@@ -101,9 +103,33 @@ export function ListView({ initialPadiglione, setView }: Props) {
     return Array.from(s).sort();
   }, [exhibitors]);
 
+  // Province ristrette alle regioni selezionate. Se nessuna regione, l'array è
+  // vuoto e il filtro provincia non viene mostrato.
+  const provinceForSelectedRegioni = useMemo(() => {
+    if (filters.regioni.length === 0) return [] as string[];
+    const reg = new Set(filters.regioni);
+    const s = new Set<string>();
+    for (const e of exhibitors) {
+      if (reg.has(e.regione) && e.provincia) s.add(e.provincia);
+    }
+    return Array.from(s).sort();
+  }, [exhibitors, filters.regioni]);
+
+  // Quando cambiano le regioni, rimuovi dalle province selezionate quelle che
+  // non appartengono più al set disponibile, così il filtro non resta "appeso".
+  useEffect(() => {
+    if (filters.province.length === 0) return;
+    const allowed = new Set(provinceForSelectedRegioni);
+    const pruned = filters.province.filter((p) => allowed.has(p));
+    if (pruned.length !== filters.province.length) {
+      setFilters((f) => ({ ...f, province: pruned }));
+    }
+  }, [provinceForSelectedRegioni, filters.province]);
+
   const filtered = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
     const reg = new Set(filters.regioni);
+    const prov = new Set(filters.province);
     const pads = new Set(filters.padiglioni);
     const cats = new Set(filters.categorie);
     const sizes = new Set(filters.sizes);
@@ -116,6 +142,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
         if (!hay.includes(q)) return false;
       }
       if (reg.size && !reg.has(e.regione)) return false;
+      if (prov.size && !prov.has(e.provincia)) return false;
       if (filters.paeseFilter === "it") {
         if (!/^ITALIA|ITALY$/i.test(e.paese)) return false;
       } else if (filters.paeseFilter === "estero") {
@@ -200,6 +227,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
             {(() => {
               const n =
                 filters.regioni.length +
+                filters.province.length +
                 filters.padiglioni.length +
                 filters.categorie.length +
                 filters.sizes.length +
@@ -303,6 +331,16 @@ export function ListView({ initialPadiglione, setView }: Props) {
                 onChange={(next) => setFilters({ ...filters, regioni: next })}
               />
             </FilterRow>
+
+            {provinceForSelectedRegioni.length > 0 && (
+              <FilterRow label={`Provincia (${provinceForSelectedRegioni.length})`}>
+                <ChipMulti
+                  values={filters.province}
+                  options={provinceForSelectedRegioni.map((p) => ({ id: p, label: p }))}
+                  onChange={(next) => setFilters({ ...filters, province: next })}
+                />
+              </FilterRow>
+            )}
 
             <FilterRow label={`Categoria (${allCategorie.length})`}>
               <ScrollableMulti
