@@ -9,11 +9,14 @@ import {
 import type { ReactNode } from "react";
 import { loadExhibitors } from "./data/loader";
 import {
+  exportBundle,
+  importBundle,
   loadCustomTags,
   loadVisits,
   patchVisit,
   saveCustomTags,
 } from "./data/storage";
+import type { MergeStats, SyncBundle } from "./data/storage";
 import type { AllVisits, Exhibitor, VisitState } from "./types";
 
 interface AppState {
@@ -25,6 +28,8 @@ interface AppState {
   toggleVisited: (id: string) => Promise<void>;
   updateVisit: (id: string, patch: Partial<VisitState>) => Promise<void>;
   addCustomTag: (tag: string) => Promise<void>;
+  exportSync: () => Promise<SyncBundle>;
+  importSync: (bundle: SyncBundle) => Promise<MergeStats>;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -90,6 +95,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [customTags],
   );
 
+  const exportSync = useCallback(() => exportBundle(), []);
+
+  const importSync = useCallback(async (bundle: SyncBundle) => {
+    const stats = await importBundle(bundle);
+    // ricarica lo stato in memoria dopo il merge
+    const [v, t] = await Promise.all([loadVisits(), loadCustomTags()]);
+    setVisits(v);
+    setCustomTags(t);
+    return stats;
+  }, []);
+
   const value = useMemo<AppState>(
     () => ({
       exhibitors,
@@ -100,8 +116,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       toggleVisited,
       updateVisit,
       addCustomTag,
+      exportSync,
+      importSync,
     }),
-    [exhibitors, loading, error, visits, customTags, toggleVisited, updateVisit, addCustomTag],
+    [exhibitors, loading, error, visits, customTags, toggleVisited, updateVisit, addCustomTag, exportSync, importSync],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

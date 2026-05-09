@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAppState } from "../state";
 import { inferSize, SIZE_LABEL } from "../data/heuristics";
+import { blobToBundle, bundleToBlob } from "../data/storage";
+import type { MergeStats } from "../data/storage";
 import type { Exhibitor, VisitState } from "../types";
 
 const HEADERS = [
@@ -46,8 +48,10 @@ function downloadXlsx(rows: Record<string, unknown>[], filename: string) {
 }
 
 export function ExportView() {
-  const { exhibitors, visits } = useAppState();
+  const { exhibitors, visits, exportSync, importSync } = useAppState();
   const [busy, setBusy] = useState<string | null>(null);
+  const [syncMsg, setSyncMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const visitedCount = exhibitors.filter((e) => visits[e.id]?.visited).length;
   const annotatedCount = exhibitors.filter(
@@ -111,6 +115,110 @@ export function ExportView() {
           <li>Con note o tag: <strong>{annotatedCount}</strong></li>
         </ul>
       </div>
+
+      <hr className="border-neutral-200 dark:border-neutral-800" />
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-bold">Sincronizza con un altro dispositivo</h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+            Esporta lo stato (visite, note, tag) in un file <code>.json</code>, mandalo all&apos;altro
+            telefono via WhatsApp/email, poi importalo lì. Il merge è
+            automatico: <strong>nessuna visita viene persa</strong>, i tag vengono uniti, le
+            note più recenti vincono.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={async () => {
+            setBusy("sync-out");
+            setSyncMsg(null);
+            try {
+              const bundle = await exportSync();
+              const blob = bundleToBlob(bundle);
+              const url = URL.createObjectURL(blob);
+              const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `tf26-sync_${stamp}.json`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+              setSyncMsg({ kind: "ok", text: "File scaricato. Inviarlo all'altro dispositivo." });
+            } catch (e) {
+              setSyncMsg({ kind: "err", text: e instanceof Error ? e.message : String(e) });
+            } finally {
+              setBusy(null);
+            }
+          }}
+          className="w-full min-h-tap rounded-lg bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-semibold py-3 disabled:opacity-50"
+        >
+          {busy === "sync-out" ? "Genero..." : "Esporta stato (per condividere)"}
+        </button>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setBusy("sync-in");
+            setSyncMsg(null);
+            try {
+              const bundle = await blobToBundle(file);
+              const stats: MergeStats = await importSync(bundle);
+              setSyncMsg({
+                kind: "ok",
+                text: `Import OK — aggiunti ${stats.added}, aggiornati ${stats.updated}, invariati ${stats.unchanged}, nuovi tag ${stats.newTags}.`,
+              });
+            } catch (err) {
+              setSyncMsg({ kind: "err", text: err instanceof Error ? err.message : String(err) });
+            } finally {
+              setBusy(null);
+              if (fileRef.current) fileRef.current.value = "";
+            }
+          }}
+        />
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => fileRef.current?.click()}
+          className="w-full min-h-tap rounded-lg border-2 border-neutral-900 dark:border-neutral-100 text-neutral-900 dark:text-neutral-100 font-semibold py-3 disabled:opacity-50"
+        >
+          {busy === "sync-in" ? "Importo..." : "Importa stato da file"}
+        </button>
+
+        {syncMsg && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`rounded-md p-2 text-sm ${
+              syncMsg.kind === "ok"
+                ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200"
+                : "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200"
+            }`}
+          >
+            {syncMsg.text}
+          </div>
+        )}
+
+        <details className="text-xs text-neutral-600 dark:text-neutral-400">
+          <summary className="cursor-pointer min-h-tap py-1">Come funziona il merge</summary>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">
+            <li>Se uno dei due dispositivi ha segnato un espositore come visitato, resta visitato dopo il merge.</li>
+            <li>Per le note, vince la più recente (timestamp dell&apos;ultima visita).</li>
+            <li>I tag vengono uniti, mai sottratti.</li>
+            <li>Si possono importare più file in sequenza, l&apos;operazione è idempotente.</li>
+          </ul>
+        </details>
+      </section>
     </div>
   );
 }
