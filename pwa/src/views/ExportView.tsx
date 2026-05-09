@@ -48,9 +48,10 @@ function downloadXlsx(rows: Record<string, unknown>[], filename: string) {
 }
 
 export function ExportView() {
-  const { exhibitors, visits, exportSync, importSync } = useAppState();
+  const { exhibitors, visits, media, exportSync, importSync } = useAppState();
   const [busy, setBusy] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [includePhotos, setIncludePhotos] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const visitedCount = exhibitors.filter((e) => visits[e.id]?.visited).length;
@@ -82,6 +83,52 @@ export function ExportView() {
     }
   };
 
+  const exportPdfReport = async () => {
+    setBusy("pdf");
+    try {
+      // Import dinamico: jspdf (e i suoi peer) pesano ~500KB. Senza
+      // code-split la home della PWA caricherebbe la libreria PDF anche per
+      // chi la usa una volta sola al rientro dalla fiera.
+      const { generateVisitReport } = await import("../data/report");
+      const blob = await generateVisitReport(exhibitors, visits, media, {
+        includePhotos,
+        title: "Tuttofood 2026 — Report visite",
+      });
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      const filename = `tuttofood-2026_report_${stamp}.pdf`;
+
+      // Su mobile prova prima Web Share con file (apre WhatsApp/mail), così
+      // l'utente non deve cercare il PDF tra i download. Fallback al download.
+      const file = new File([blob], filename, { type: "application/pdf" });
+      const canShareFile =
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
+      if (canShareFile && navigator.share) {
+        try {
+          await navigator.share({
+            title: "Report visite Tuttofood 2026",
+            files: [file],
+          });
+          return;
+        } catch (e) {
+          if ((e as DOMException)?.name === "AbortError") return;
+          // qualunque altro errore: ricado sul download
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="px-4 pt-safe pb-2 space-y-4">
       <h1 className="text-xl font-bold">Export</h1>
@@ -106,6 +153,40 @@ export function ExportView() {
       >
         {busy === "all" ? "Genero..." : `Esporta tutti (${exhibitors.length} espositori)`}
       </button>
+
+      <hr className="border-neutral-200 dark:border-neutral-800" />
+
+      <section className="space-y-2">
+        <div>
+          <h2 className="text-lg font-bold">Report PDF visite</h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+            Una pagina per espositore visitato/annotato con dati anagrafici,
+            contatti, note, tag e (se presenti) le foto allegate. Da girare al
+            team o al cliente come "report fiera".
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm select-none cursor-pointer min-h-tap">
+          <input
+            type="checkbox"
+            checked={includePhotos}
+            onChange={(e) => setIncludePhotos(e.target.checked)}
+            className="h-5 w-5 accent-brand-500"
+          />
+          <span>
+            Includi foto nel PDF ({media.filter((m) => m.kind === "photo").length} disponibili)
+          </span>
+        </label>
+        <button
+          type="button"
+          disabled={busy !== null || annotatedCount === 0}
+          onClick={exportPdfReport}
+          className="w-full min-h-tap rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold py-3 disabled:opacity-50"
+        >
+          {busy === "pdf"
+            ? "Genero PDF..."
+            : `Esporta report PDF (${annotatedCount} espositori)`}
+        </button>
+      </section>
 
       <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 text-sm">
         <div className="font-semibold mb-1">Riepilogo</div>
