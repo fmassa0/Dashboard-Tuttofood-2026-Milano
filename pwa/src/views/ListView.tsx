@@ -31,6 +31,7 @@ export interface ListFilters {
   categorie: string[];
   sizes: CompanySize[];
   sort: SortKey;
+  onlyPlanned: boolean;
 }
 
 const DEFAULT_FILTERS: ListFilters = {
@@ -41,6 +42,7 @@ const DEFAULT_FILTERS: ListFilters = {
   categorie: [],
   sizes: [],
   sort: "alpha",
+  onlyPlanned: false,
 };
 
 interface Props {
@@ -107,6 +109,7 @@ export function ListView({ initialPadiglione, setView }: Props) {
     const sizes = new Set(filters.sizes);
 
     const result = exhibitors.filter((e) => {
+      if (filters.onlyPlanned && !visits[e.id]?.planned) return false;
       if (q) {
         const hay =
           (e.nome + " " + e.citta + " " + e.descrizione + " " + e.marchi).toLowerCase();
@@ -194,11 +197,20 @@ export function ListView({ initialPadiglione, setView }: Props) {
             className="min-h-tap min-w-tap px-3 rounded-full border border-neutral-300 dark:border-neutral-700 font-medium"
           >
             Filtri
-            {(filters.regioni.length + filters.padiglioni.length + filters.categorie.length + filters.sizes.length) > 0 && (
-              <span className="ml-1 inline-flex items-center justify-center text-xs bg-brand-500 text-white rounded-full px-1.5">
-                {filters.regioni.length + filters.padiglioni.length + filters.categorie.length + filters.sizes.length}
-              </span>
-            )}
+            {(() => {
+              const n =
+                filters.regioni.length +
+                filters.padiglioni.length +
+                filters.categorie.length +
+                filters.sizes.length +
+                (filters.onlyPlanned ? 1 : 0) +
+                (filters.paeseFilter !== "all" ? 1 : 0);
+              return n > 0 ? (
+                <span className="ml-1 inline-flex items-center justify-center text-xs bg-brand-500 text-white rounded-full px-1.5">
+                  {n}
+                </span>
+              ) : null;
+            })()}
           </button>
         </div>
 
@@ -208,6 +220,22 @@ export function ListView({ initialPadiglione, setView }: Props) {
             className="px-4 pb-3 space-y-3 text-sm border-t border-neutral-200 dark:border-neutral-800 overflow-y-auto overscroll-contain"
             style={{ maxHeight: "calc(100svh - 13rem)" }}
           >
+            <FilterRow label="Selezione">
+              <button
+                type="button"
+                aria-pressed={filters.onlyPlanned}
+                onClick={() => setFilters({ ...filters, onlyPlanned: !filters.onlyPlanned })}
+                className={`min-h-tap px-3 rounded-full border text-xs font-medium inline-flex items-center gap-1 ${
+                  filters.onlyPlanned
+                    ? "bg-amber-500 border-amber-500 text-white"
+                    : "border-neutral-300 dark:border-neutral-700"
+                }`}
+              >
+                <span aria-hidden="true">★</span>
+                Solo nel percorso
+              </button>
+            </FilterRow>
+
             <FilterRow label="Paese">
               <div className="flex gap-1.5 flex-wrap">
                 {(["all", "it", "estero"] as PaeseFilter[]).map((p) => (
