@@ -19,6 +19,13 @@ import {
   saveSettings,
 } from "./data/storage";
 import type { MergeStats, SyncBundle } from "./data/storage";
+import {
+  addMediaItem,
+  compressImage,
+  loadMediaManifest,
+  removeMediaItem,
+} from "./data/media";
+import type { MediaItem } from "./data/media";
 import type { AllVisits, AppSettings, Exhibitor, VisitState } from "./types";
 
 interface AppState {
@@ -28,11 +35,15 @@ interface AppState {
   visits: AllVisits;
   customTags: string[];
   settings: AppSettings;
+  media: MediaItem[];
   toggleVisited: (id: string) => Promise<void>;
   togglePlanned: (id: string) => Promise<void>;
   updateVisit: (id: string, patch: Partial<VisitState>) => Promise<void>;
   addCustomTag: (tag: string) => Promise<void>;
   setRouteStart: (padiglione: string) => Promise<void>;
+  addPhoto: (exhibitorId: string, file: File | Blob) => Promise<void>;
+  addAudio: (exhibitorId: string, blob: Blob, durationMs?: number) => Promise<void>;
+  removeMedia: (id: string) => Promise<void>;
   exportSync: () => Promise<SyncBundle>;
   importSync: (bundle: SyncBundle) => Promise<MergeStats>;
 }
@@ -44,6 +55,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [visits, setVisits] = useState<AllVisits>({});
   const [customTags, setCustomTags] = useState<string[]>([]);
   const [settings, setSettings] = useState<AppSettings>({});
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,17 +63,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     let canceled = false;
     (async () => {
       try {
-        const [list, v, tags, s] = await Promise.all([
+        const [list, v, tags, s, m] = await Promise.all([
           loadExhibitors(),
           loadVisits(),
           loadCustomTags(),
           loadSettings(),
+          loadMediaManifest(),
         ]);
         if (canceled) return;
         setExhibitors(list);
         setVisits(v);
         setCustomTags(tags);
         setSettings(s);
+        setMedia(m);
       } catch (e) {
         if (!canceled) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -109,6 +123,28 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [settings],
   );
 
+  const addPhoto = useCallback(
+    async (exhibitorId: string, file: File | Blob) => {
+      const compressed = await compressImage(file);
+      const item = await addMediaItem(exhibitorId, "photo", compressed);
+      setMedia((m) => [...m, item]);
+    },
+    [],
+  );
+
+  const addAudio = useCallback(
+    async (exhibitorId: string, blob: Blob, durationMs?: number) => {
+      const item = await addMediaItem(exhibitorId, "audio", blob, { durationMs });
+      setMedia((m) => [...m, item]);
+    },
+    [],
+  );
+
+  const removeMedia = useCallback(async (id: string) => {
+    await removeMediaItem(id);
+    setMedia((m) => m.filter((x) => x.id !== id));
+  }, []);
+
   const addCustomTag = useCallback(
     async (tag: string) => {
       const t = tag.trim();
@@ -140,15 +176,19 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       visits,
       customTags,
       settings,
+      media,
       toggleVisited,
       togglePlanned,
       updateVisit,
       addCustomTag,
       setRouteStart,
+      addPhoto,
+      addAudio,
+      removeMedia,
       exportSync,
       importSync,
     }),
-    [exhibitors, loading, error, visits, customTags, settings, toggleVisited, togglePlanned, updateVisit, addCustomTag, setRouteStart, exportSync, importSync],
+    [exhibitors, loading, error, visits, customTags, settings, media, toggleVisited, togglePlanned, updateVisit, addCustomTag, setRouteStart, addPhoto, addAudio, removeMedia, exportSync, importSync],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

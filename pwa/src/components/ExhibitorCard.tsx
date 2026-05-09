@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Exhibitor, VisitState, CompanySize } from "../types";
 import { useAppState } from "../state";
 import { inferSize, SIZE_LABEL } from "../data/heuristics";
+import { MediaSection } from "./MediaSection";
 
 interface Props {
   ex: Exhibitor;
@@ -16,7 +17,7 @@ const PRESET_TAGS = ["interessante", "ricontattare", "competitor", "fornitore"];
 const SIZES: CompanySize[] = ["grande", "media", "piccola", "consorzio", "n.d."];
 
 export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }: Props) {
-  const { toggleVisited, togglePlanned, updateVisit, customTags, addCustomTag } = useAppState();
+  const { toggleVisited, togglePlanned, updateVisit, customTags, addCustomTag, media } = useAppState();
   const [noteDraft, setNoteDraft] = useState(visit?.notes ?? "");
   const [newTag, setNewTag] = useState("");
 
@@ -24,6 +25,13 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }
   const planned = visit?.planned ?? false;
   const tags = visit?.tags ?? [];
   const size: CompanySize = visit?.size ?? inferSize(ex);
+
+  // Conteggio media per il badge sulla card chiusa: serve solo per dare un
+  // hint visivo che ci sono allegati senza dover espandere.
+  const mediaCount = useMemo(
+    () => media.filter((m) => m.exhibitorId === ex.id).length,
+    [media, ex.id],
+  );
 
   const cats = (ex.categorie || "").split(" | ").filter(Boolean);
 
@@ -84,11 +92,22 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }
               {ex.stand ? ` Stand ${ex.stand}` : ""}
             </span>
           </span>
-          {tags.length > 0 && (
-            <span className="shrink-0 text-[10px] uppercase tracking-wide rounded bg-brand-50 dark:bg-brand-700/30 text-brand-700 dark:text-brand-50 px-1.5 py-0.5">
-              {tags.length} tag
-            </span>
-          )}
+          <span className="shrink-0 flex items-center gap-1">
+            {mediaCount > 0 && (
+              <span
+                className="text-[10px] uppercase tracking-wide rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 px-1.5 py-0.5"
+                aria-label={`${mediaCount} allegati`}
+                title={`${mediaCount} allegati`}
+              >
+                📷 {mediaCount}
+              </span>
+            )}
+            {tags.length > 0 && (
+              <span className="text-[10px] uppercase tracking-wide rounded bg-brand-50 dark:bg-brand-700/30 text-brand-700 dark:text-brand-50 px-1.5 py-0.5">
+                {tags.length} tag
+              </span>
+            )}
+          </span>
         </button>
         <button
           type="button"
@@ -199,6 +218,9 @@ export function ExhibitorCard({ ex, visit, expanded, onToggleExpand, onMeasure }
               ))}
             </select>
           </div>
+
+          {/* Foto e audio */}
+          <MediaSection exhibitorId={ex.id} />
 
           {/* Notes */}
           <div>
